@@ -20,6 +20,18 @@ HTTP API 调用其自带的 MiniMax Hailuo（节点前端展示名 "MiniMax H3 T
   如果目标 ComfyUI 服务端已经在自己一侧配置好该凭证（例如自托管网关），
   这里的 `api_key` 也可以留空——因此 `comfyui` 的 `requires_api_key=False`。
 
+## API Key 的两种配置方式（优先级从高到低）
+
+1. **供应商管理界面**：在 `comfyui` 这个 Provider 的 `api_key` 字段里直接填写。
+2. **环境变量 `COMFY_API_KEY`**：写入后端 `.env`（或容器/部署环境变量），
+   对应 `app/config.py` 里的 `Settings.comfy_api_key`。
+   仅当第 1 项留空时才会生效，方便自托管部署直接用环境变量下发密钥，
+   不需要在界面上手动配置。
+
+两者最终都会通过 `POST /prompt` 请求体的 `extra_data.api_key_comfy_org` 注入
+节点隐藏输入，解析逻辑见 `app/core/integrations/comfyui/video.py` 中的
+`resolve_comfyui_api_key()`。
+
 ## 配置步骤
 
 1. 确保目标 ComfyUI 实例可从 Jellyfish 后端网络访问，且已加载官方
@@ -28,7 +40,8 @@ HTTP API 调用其自带的 MiniMax Hailuo（节点前端展示名 "MiniMax H3 T
    - `name`：填 `comfyui`（或任意包含 `comfyui`/`comfy`/`minimax h3`/`hailuo`
      的别名，均可被 `resolve_provider_key_from_name` 解析到 `comfyui`）。
    - `video_base_url` 或 `base_url`：填 ComfyUI 服务器地址。
-   - `api_key`：填 comfy.org API Key（如目标服务端已自行配置鉴权可留空）。
+   - `api_key`：填 comfy.org API Key；也可以留空，改用环境变量
+     `COMFY_API_KEY`（见上一节）。
 3. 新增一个 `category=video` 的 Model，`provider_id` 指向上一步的 Provider；
    `Model.name` 建议填 `MiniMax H3` / `MiniMax H3 Max` / `MiniMax H3 Max Turbo`
    之一（大小写、连字符不敏感，未识别时按 `MiniMax H3` 处理）。

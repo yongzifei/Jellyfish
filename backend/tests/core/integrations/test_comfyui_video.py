@@ -86,6 +86,40 @@ async def test_comfyui_queue_prompt_sends_api_key_in_extra_data(monkeypatch: pyt
     assert prompt_id == "p-1"
 
 
+def test_resolve_comfyui_api_key_prefers_provider_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.integrations.comfyui.video import resolve_comfyui_api_key
+
+    monkeypatch.setattr("app.core.integrations.comfyui.video.settings.comfy_api_key", "env-key")
+    cfg_with_db_key = ProviderConfig(provider="comfyui", api_key="db-key")
+    assert resolve_comfyui_api_key(cfg_with_db_key) == "db-key"
+
+    cfg_without_db_key = ProviderConfig(provider="comfyui", api_key="")
+    assert resolve_comfyui_api_key(cfg_without_db_key) == "env-key"
+
+
+def test_resolve_comfyui_api_key_empty_when_neither_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.integrations.comfyui.video import resolve_comfyui_api_key
+
+    monkeypatch.setattr("app.core.integrations.comfyui.video.settings.comfy_api_key", None)
+    cfg = ProviderConfig(provider="comfyui", api_key="")
+    assert resolve_comfyui_api_key(cfg) == ""
+
+
+@pytest.mark.asyncio
+async def test_comfyui_queue_prompt_falls_back_to_env_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode())
+        assert body["extra_data"]["api_key_comfy_org"] == "env-only-key"
+        return httpx.Response(200, json={"prompt_id": "p-2"})
+
+    _patch_httpx_client(monkeypatch, httpx.MockTransport(handler))
+    monkeypatch.setattr("app.core.integrations.comfyui.video.settings.comfy_api_key", "env-only-key")
+    cfg = ProviderConfig(provider="comfyui", api_key="", base_url="http://127.0.0.1:8188")
+    inp = VideoGenerationInput.model_validate({"prompt": "a cat", "ratio": "16:9"})
+    prompt_id = await ComfyUIVideoApiAdapter().queue_prompt(cfg=cfg, input_=inp, timeout_s=30.0)
+    assert prompt_id == "p-2"
+
+
 @pytest.mark.asyncio
 async def test_comfyui_get_history_returns_entry(monkeypatch: pytest.MonkeyPatch) -> None:
     def handler(request: httpx.Request) -> httpx.Response:

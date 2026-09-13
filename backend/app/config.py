@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     # 可选：对外访问基址（CDN 或自定义域名），为空则使用 S3 自带 URL 或预签名 URL
     s3_public_base_url: str | None = None
 
+    # ComfyUI：MiniMax H3 等 API 节点鉴权用的 comfy.org API Key。
+    # 优先级低于 Provider.api_key（DB 配置）；仅当后者为空时使用此环境变量兜底，
+    # 便于自托管部署直接用环境变量配置，无需在供应商管理界面手填密钥。
+    comfy_api_key: str | None = None
+
     def model_post_init(self, __context: object) -> None:
         if not self.celery_broker_url or not str(self.celery_broker_url).strip():
             password_part = f":{self.redis_password}@" if self.redis_password else ""

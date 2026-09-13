@@ -6,11 +6,20 @@ import uuid
 from typing import Any
 from urllib.parse import urlencode
 
+from app.config import settings
 from app.core.integrations.comfyui.video_payload import build_text_to_video_workflow
 from app.core.contracts.provider import ProviderConfig
 from app.core.contracts.video_generation import VideoGenerationInput
 
 DEFAULT_COMFYUI_BASE_URL = "http://127.0.0.1:8188"
+
+
+def resolve_comfyui_api_key(cfg: ProviderConfig) -> str:
+    """解析实际使用的 comfy.org API Key：DB 里 Provider.api_key 优先，其次回落到环境变量 COMFY_API_KEY。"""
+    api_key = (cfg.api_key or "").strip()
+    if api_key:
+        return api_key
+    return (settings.comfy_api_key or "").strip()
 
 
 class ComfyUIVideoApiAdapter:
@@ -37,7 +46,7 @@ class ComfyUIVideoApiAdapter:
         }
         # MiniMax H3 是 ComfyUI 的 API 节点，鉴权走 comfy.org 签发的 API Key，
         # 通过 extra_data.api_key_comfy_org 注入节点隐藏输入（而非 Authorization 头）。
-        api_key = (cfg.api_key or "").strip()
+        api_key = resolve_comfyui_api_key(cfg)
         if api_key:
             body["extra_data"] = {"api_key_comfy_org": api_key}
 
