@@ -43,6 +43,11 @@ def register_video_model_capability(
 
         register_openai_video_capability(model_prefix=model_prefix, capability=capability)
         return
+    if provider == "comfyui":
+        from app.core.integrations.comfyui.video_capabilities import register_comfyui_video_capability
+
+        register_comfyui_video_capability(model_prefix=model_prefix, capability=capability)
+        return
     from app.core.integrations.volcengine.video_capabilities import register_volcengine_video_capability
 
     register_volcengine_video_capability(model_prefix=model_prefix, capability=capability)
@@ -50,15 +55,20 @@ def register_video_model_capability(
 
 def clear_video_model_capability_overrides(*, provider: ProviderKey | None = None) -> None:
     """兼容入口：清空能力覆盖；供测试或重置场景使用。"""
+    from app.core.integrations.comfyui.video_capabilities import clear_comfyui_video_capability_overrides
     from app.core.integrations.openai.video_capabilities import clear_openai_video_capability_overrides
     from app.core.integrations.volcengine.video_capabilities import clear_volcengine_video_capability_overrides
 
     if provider is None:
         clear_openai_video_capability_overrides()
         clear_volcengine_video_capability_overrides()
+        clear_comfyui_video_capability_overrides()
         return
     if provider == "openai":
         clear_openai_video_capability_overrides()
+        return
+    if provider == "comfyui":
+        clear_comfyui_video_capability_overrides()
         return
     clear_volcengine_video_capability_overrides()
 
@@ -68,6 +78,10 @@ def resolve_video_capability(*, provider: ProviderKey, model: str | None) -> Vid
         from app.core.integrations.openai.video_capabilities import resolve_openai_video_capability
 
         return resolve_openai_video_capability(model)
+    if provider == "comfyui":
+        from app.core.integrations.comfyui.video_capabilities import resolve_comfyui_video_capability
+
+        return resolve_comfyui_video_capability(model)
     from app.core.integrations.volcengine.video_capabilities import resolve_volcengine_video_capability
 
     return resolve_volcengine_video_capability(model)

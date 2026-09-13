@@ -32,5 +32,15 @@ def bootstrap_builtin_providers() -> None:
                 supported_categories=(ModelCategoryKey.text,),
                 default_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
             ),
+            ProviderSpec(
+                key="comfyui",
+                display_name="ComfyUI",
+                aliases=("comfyui", "comfy", "minimax h3", "minimax-h3", "hailuo"),
+                supported_categories=(ModelCategoryKey.video,),
+                default_base_url="http://127.0.0.1:8188",
+                # api_key 对应 ComfyUI API 节点鉴权用的 comfy.org API Key；
+                # 部分自托管环境会在 ComfyUI 服务端自行配置该凭证，故不强制要求。
+                requires_api_key=False,
+            ),
         ]
     )

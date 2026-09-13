@@ -9,6 +9,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator
 
+from app.core.integrations.comfyui.video import ComfyUIVideoApiAdapter
 from app.core.integrations.openai.video import OpenAIVideoApiAdapter
 from app.core.integrations.volcengine.video import VolcengineVideoApiAdapter
 from app.core.contracts.provider import ProviderConfig
@@ -22,6 +23,7 @@ __all__ = [
     "AbstractVideoGenerationTask",
     "OpenAIVideoGenerationTask",
     "VolcengineVideoGenerationTask",
+    "ComfyUIVideoGenerationTask",
     "VideoGenerationTask",
 ]
 
@@ -206,6 +208,68 @@ class VolcengineVideoGenerationTask(AbstractVideoGenerationTask):
         )
 
 
+class ComfyUIVideoGenerationTask(AbstractVideoGenerationTask):
+    """ComfyUI MiniMax H3 文生视频：adapter 负责工作流提交/历史查询，Task 负责轮询。"""
+
+    def __init__(
+        self,
+        *,
+        adapter: ComfyUIVideoApiAdapter | None = None,
+        provider_config: ProviderConfig,
+        input_: VideoGenerationInput,
+        poll_interval_s: float = 2.0,
+        timeout_s: float = 120.0,
+    ) -> None:
+        super().__init__(
+            provider_config=provider_config,
+            input_=input_,
+            poll_interval_s=poll_interval_s,
+            timeout_s=timeout_s,
+        )
+        self._adapter = adapter or ComfyUIVideoApiAdapter()
+
+    async def _create_task(self) -> None:
+        self._provider_task_id = await self._adapter.queue_prompt(
+            cfg=self._cfg,
+            input_=self._input,
+            timeout_s=self._timeout_s,
+        )
+
+    async def _poll_and_get_result(self) -> VideoGenerationResult:
+        prompt_id = self._provider_task_id or ""
+        if not prompt_id:
+            raise RuntimeError("ComfyUI poll missing provider task id")
+
+        while True:
+            entry = await self._adapter.get_history(
+                cfg=self._cfg,
+                prompt_id=prompt_id,
+                timeout_s=self._timeout_s,
+            )
+            if entry:
+                error = self._adapter.is_execution_error(entry)
+                if error:
+                    raise RuntimeError(f"ComfyUI execution failed: {error}")
+                if self._adapter.is_completed(entry):
+                    video_file = self._adapter.find_output_video(entry)
+                    if not video_file:
+                        raise RuntimeError(f"ComfyUI history has no video output: {entry!r}")
+                    video_url = self._adapter.build_view_url(
+                        cfg=self._cfg,
+                        filename=str(video_file.get("filename")),
+                        subfolder=str(video_file.get("subfolder") or ""),
+                        file_type=str(video_file.get("type") or "output"),
+                    )
+                    return VideoGenerationResult(
+                        url=video_url,
+                        file_id=None,
+                        provider_task_id=prompt_id,
+                        provider="comfyui",
+                        status="completed",
+                    )
+            await self._sleep_poll()
+
+
 class VideoGenerationTask(BaseTask):
     """按 provider 分派到 OpenAI / 火山实现；对外构造函数签名保持不变。"""
 
@@ -252,6 +316,21 @@ class VideoGenerationTask(BaseTask):
         timeout_s: float = 120.0,
     ) -> AbstractVideoGenerationTask:
         return VolcengineVideoGenerationTask(
+            provider_config=provider_config,
+            input_=input_,
+            poll_interval_s=poll_interval_s,
+            timeout_s=timeout_s,
+        )
+
+    @staticmethod
+    def _build_comfyui_impl(
+        *,
+        provider_config: ProviderConfig,
+        input_: VideoGenerationInput,
+        poll_interval_s: float = 2.0,
+        timeout_s: float = 120.0,
+    ) -> AbstractVideoGenerationTask:
+        return ComfyUIVideoGenerationTask(
             provider_config=provider_config,
             input_=input_,
             poll_interval_s=poll_interval_s,
